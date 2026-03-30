@@ -82,6 +82,7 @@ struct channel
     {13, SWITCH, {19}, 1}   // These pins are on solder pads on the bottom of the board
 };
 
+
 /*
  * Drive motor (ESC) with given pulse width (1000-2000 µs)
  * bidirectionally using two pins per motor (pin[0] for forward, pin[1] for reverse)
@@ -89,8 +90,8 @@ struct channel
  * Added pulse stretch to enable full stick control range for ESCs.
  */
 
-#define DEADBAND 3  // noise value around midband from transmitter
-#define MIN_MOTOR 35    // value at which motor just starts moving
+#define DEADBAND 10  // noise value around midband from transmitter
+#define MIN_MOTOR 6600    // value at which motor just starts moving
 
 void motor_drive(struct channel channel, uint16_t pulse_width)
 {
@@ -109,6 +110,7 @@ void motor_drive(struct channel channel, uint16_t pulse_width)
 
         pwm_set_gpio_level(channel.pin[0], level);   // Forward pin
         pwm_set_gpio_level(channel.pin[1], 0);       // Reverse pin off
+        printf("%u ", level);
     }
     else if (pulse_width < 1500 - DEADBAND)
     {
@@ -119,6 +121,7 @@ void motor_drive(struct channel channel, uint16_t pulse_width)
 
         pwm_set_gpio_level(channel.pin[1], level);   // Reverse pin
         pwm_set_gpio_level(channel.pin[0], 0);       // Forward pin off
+        printf("%u ", level);
     }
     else
     {
@@ -176,21 +179,34 @@ int main()
 {
     stdio_init_all();
 
+    for (uint8_t i = 0; i < IBUS_NUM_CHANNELS; i++)  // loop through all channels in config and initialise hardware based on type
+    {
+        switch(channels[i].type)
+        {
+        case MOTOR:
+            hwpwm_init(channels[i].pin, channels[i].num_pins, MOTOR_FREQ_HZ);  // initialise PWM pins for this motor channel at 10kHz for ESC control
+            pwm_set_gpio_level(channels[i].pin[0], 0);       // Forward pin off
+            pwm_set_gpio_level(channels[i].pin[1], 0);       // Reverse pin off
+            break;
+
+        case SERVO:
+            hwpwm_init(channels[i].pin, channels[i].num_pins, SERVO_FREQ_HZ);  // initialise PWM pin for this servo channel at 250Hz for servo control
+            pwm_set_gpio_level(channels[i].pin[0], 0);       // servo output off (0 pulse width) on startup
+            break;
+
+        case SWITCH:
+            gpio_init(channels[i].pin[0]);  // Set switch pin as gpio
+            gpio_set_dir(channels[i].pin[0], GPIO_OUT);  // Set switch pin as output
+            gpio_put(channels[i].pin[0], 0);  // Set switch pin to 0 (off)
+            ibus_channels[i] = 1000;  // Set switch channel to minimum (off) on startup
+            break;
+        }
+    }
+
     sleep_ms(1000);                   // Wait for usb serial to settle after reset
 
     printf("START of PROGRAM\n");     // DEBUG indication that program has started
 
-    for (uint8_t i = 0; i < 14; i++)  // loop through all channels in config and initialise hardware based on type
-    {
-        if (channels[i].type == MOTOR)
-        {
-            hwpwm_init(channels[i].pin, channels[i].num_pins, MOTOR_FREQ_HZ);  // initialise PWM pins for this motor channel at 10kHz for ESC control
-        }
-        else if (channels[i].type == SERVO)
-        {
-            hwpwm_init(channels[i].pin, channels[i].num_pins, SERVO_FREQ_HZ);  // initialise PWM pin for this servo channel at 250Hz for servo control
-        }
-    }
 
 #ifdef RGBLED
     ws2812_pio_init(WS2812_PIO, WS2812_SM, WS2812_PIN);  // ws2812 output pio state machine
