@@ -130,54 +130,11 @@ void motor_drive(struct channel channel, uint16_t pulse_width)
     }
 }
 
-#ifdef NEVER         // old motor_drive function
-#define DEADBAND 30  // deadband in microseconds for motor control around neutral (1500 µs) to prevent jitter
-
-void motor_drive(struct channel channel, uint16_t pulse_width)
-{
-    // For motors (ESCs), we assume pulse_width is already in the correct range (e.g., 1000-2000 µs) and just convert to PWM level
-    if (pulse_width < 1000)
-        pulse_width = 1000;                     // constrain to minimum
-    if (pulse_width > 2000)
-        pulse_width = 2000;                     // constrain to maximum
-
-    uint slice_num =
-        pwm_gpio_to_slice_num(channel.pin[0]);  // both forward and reverse pins are on the same slice, so just use pin[0] to get slice number
-
-    if (pulse_width > 1500 + DEADBAND)
-    {
-        // forward
-        uint16_t level =
-            ((uint64_t)(pulse_width - 1500) * (servo_wrap[slice_num] + 1)) / 500;  // convert pulse_width to PWM level based on frequency and wrap
-        pwm_set_gpio_level(channel.pin[0], level);                                 // output full pulse width range for ESC control on forward pin
-        pwm_set_gpio_level(channel.pin[1], 0);                                     // set reverse pin to 0
-    }
-    else if (pulse_width < 1500 - DEADBAND)
-    {
-        // reverse
-        uint16_t level = ((uint64_t)(1500 - pulse_width) * (servo_wrap[slice_num] + 1)) / 500;  // convert pulse_width to PWM
-        pwm_set_gpio_level(channel.pin[1], level);  // output full pulse width range for ESC control on reverse pin
-        pwm_set_gpio_level(channel.pin[0], 0);      // set forward pin to 0
-    }
-    else
-    {                                               // within deadband around neutral - set both forward and reverse pins to 0 to prevent jitter
-
-        pwm_set_gpio_level(channel.pin[0], 0);      // set forward pin to 0
-        pwm_set_gpio_level(channel.pin[1], 0);      // set reverse pin to 0
-    }
-}
-#endif                                              // NEVER
-
 /*
- * Initialise hardware, set up iBus read loop on core 1,
- * then in the main loop check for new iBus data and update servo positions accordingly,
- * as well as checking for telemetry queries and responding if needed.
- *
- */
-int main()
+* initialise channel outputs
+*/
+void init_channels(void)
 {
-    stdio_init_all();
-
     for (uint8_t i = 0; i < IBUS_NUM_CHANNELS; i++)  // loop through all channels in config and initialise hardware based on type
     {
         switch (channels[i].type)
@@ -201,7 +158,19 @@ int main()
             break;
         }
     }
+}
 
+
+/*
+ * Initialise hardware, set up iBus read loop on core 1,
+ * then in the main loop check for new iBus data and update servo positions accordingly,
+ * as well as checking for telemetry queries and responding if needed.
+ *
+ */
+int main()
+{
+    stdio_init_all();
+    init_channels();                                     // initialise all channel outputs
     sleep_ms(1000);                                      // Wait for usb serial to settle after reset
 
     printf("START of PROGRAM\n");                        // DEBUG indication that program has started
@@ -209,12 +178,6 @@ int main()
 #ifdef RGBLED
     ws2812_pio_init(WS2812_PIO, WS2812_SM, WS2812_PIN);  // ws2812 output pio state machine
 #endif                                                   // RGBLED
-    printf("System Clock Frequency is %d Hz\n", clock_get_hz(clk_sys));
-
-#ifdef I2C_ENABLE
-    // Initialize I2C for PCA9685 board
-    initialise_pca9685();  // initialise PWM on pca9685 board
-#endif                     // I2C_ENABLE
 
     Ibus_Init();           // Start iBus receiver on Core 1
 
@@ -232,16 +195,6 @@ int main()
             {
                 put_pixel(GREEN);  // flash green on the RGB LED to indicate normal operation (comment out if not using RGB LED)
             }
-
-#ifdef I2C_ENABLE
-            // DEBUG: print channel values to console
-            for (uint8_t i = 0; i < 14; i++)
-            {
-                pca9685_set_servo_position(i, ibus_channels[i]);  // Set servo on each channel to the value of ibus channel
-                printf("%4u ", ibus_channels[i]);
-            }
-            printf("\n");
-#endif  // I2C_ENABLE
 
             for (uint8_t i = 0; i < IBUS_NUM_CHANNELS; i++)
             {
