@@ -7,7 +7,7 @@
  * Also includes examples of using the PIO for blinking an LED and using timers.
  *
  * Supports both iBus and CRSF receivers (selectable via #define at top of file).
- * 
+ *
  * Pinouts for RP2040:
  * 0-3: PWM outputs to servos (GPIO 0,1 on slice 0; 2,3 on slice 1)
  * 4,5: UART1 (TX,RX) for telemetry output to receiver (optional - PWM slice 2 if not using telemetry)
@@ -18,7 +18,7 @@
  * 26,27: Analog inputs or I2C1 for PCA9685 board if no additional analog inputs needed)
  * 28: Analog input for telemetry (optional - for reading battery voltage )
  * 29: UART0 (RX) for iBus/CRSF input (only needs one RX pin - TX not used for iBus)
- * Optionally UART1 (GPIO 4,5) can be used for telemetry output to receiver if supported by receiver and desired 
+ * Optionally UART1 (GPIO 4,5) can be used for telemetry output to receiver if supported by receiver and desired
  *
  * specific whole slices can be set for brushed motor ESC control if desired
  *               faster update rate, full pwm range (0-100% duty cycle)
@@ -30,19 +30,21 @@
 #include "hardware/clocks.h"
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
+#include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
-#include "pico/multicore.h"
 
 #include "InternalPWM.h"
+#include "adc.h"
 #include "blink.pio.h"
 #include "rgbled.h"
 
 #define VBAT 28  // Analog input for battery voltage monitoring
 
-#define CRSF    // Receiver is CRSF protocol 
-// #define IBUS    // Receiver is iBus protocol (comment out if using CRSF, as code is currently set up to use either CRSF or iBus, but not both at the same time)
-// #define I2C_ENABLE   // Uncomment to enable I2C for controlling PCA9685 board (comment out if using analog inputs on GPIO 26 and 27 instead)
+#define CRSF     // Receiver is CRSF protocol
+// #define IBUS    // Receiver is iBus protocol (comment out if using CRSF, as code is currently set up to use either CRSF or iBus, but not both at
+// the same time) #define I2C_ENABLE   // Uncomment to enable I2C for controlling PCA9685 board (comment out if using analog inputs on GPIO 26 and 27
+// instead)
 #define RGBLED  // Enable use of on-board RGB LED for status indication (uses PIO program to control LED blinking)
 
 #ifdef I2C_ENABLE
@@ -84,7 +86,8 @@ struct channel
     enum ChannelType type;  // Type of output (MOTOR, SERVO, SWITCH)
     uint8_t pin[2];         // GPIO pin(s) for this channel (1 pin for SERVO, 2 pins for MOTOR for forward/reverse control)
     uint8_t num_pins;       // Number of pins used (1 for SERVO, 2 for MOTOR)
-} channels[] = {            // Supports 14 channels with IBUS, 16 channels with CRSF (ELRS)
+} channels[] = {
+    // Supports 14 channels with IBUS, 16 channels with CRSF (ELRS)
     {0, MOTOR, {0, 1}, 2},  // Tank left track
     {1, MOTOR, {2, 3}, 2},  // Tank right track
     {2, MOTOR, {6, 7}, 2},  // Tank turret rotation
@@ -152,8 +155,8 @@ void motor_drive(struct channel channel, uint16_t pulse_width)
 }
 
 /*
-* initialise channel outputs
-*/
+ * initialise channel outputs
+ */
 void init_channels(void)
 {
     for (uint8_t i = 0; i < NUM_CHANNELS; i++)  // loop through all channels in config and initialise hardware based on type
@@ -161,26 +164,27 @@ void init_channels(void)
         switch (channels[i].type)
         {
         case MOTOR:
-            hwpwm_init(channels[i].pin, channels[i].num_pins, MOTOR_FREQ_HZ);  // initialise PWM pins for this motor channel at high frequency for ESC control
-            pwm_set_gpio_level(channels[i].pin[0], 0);                         // Forward pin off
-            pwm_set_gpio_level(channels[i].pin[1], 0);                         // Reverse pin off
+            hwpwm_init(channels[i].pin, channels[i].num_pins,
+                       MOTOR_FREQ_HZ);                  // initialise PWM pins for this motor channel at high frequency for ESC control
+            pwm_set_gpio_level(channels[i].pin[0], 0);  // Forward pin off
+            pwm_set_gpio_level(channels[i].pin[1], 0);  // Reverse pin off
             break;
 
         case SERVO:
-            hwpwm_init(channels[i].pin, channels[i].num_pins, SERVO_FREQ_HZ);  // initialise PWM pin for this servo channel at servo frequency for servo control
-            pwm_set_gpio_level(channels[i].pin[0], 0);                         // servo output off (0 pulse width) on startup
+            hwpwm_init(channels[i].pin, channels[i].num_pins,
+                       SERVO_FREQ_HZ);                  // initialise PWM pin for this servo channel at servo frequency for servo control
+            pwm_set_gpio_level(channels[i].pin[0], 0);  // servo output off (0 pulse width) on startup
             break;
 
         case SWITCH:
             gpio_init(channels[i].pin[0]);               // Set switch pin as gpio
             gpio_set_dir(channels[i].pin[0], GPIO_OUT);  // Set switch pin as output
             gpio_put(channels[i].pin[0], 0);             // Set switch pin to 0 (off)
-            RC_Channels[i] = 1000;                     // Set switch channel to minimum (off) on startup
+            RC_Channels[i] = 1000;                       // Set switch channel to minimum (off) on startup
             break;
         }
     }
 }
-
 
 /*
  * Initialise hardware, set up iBus/CRSF read loop on core 1,
@@ -200,13 +204,15 @@ int main()
     ws2812_pio_init(WS2812_PIO, WS2812_SM, WS2812_PIN);  // ws2812 output pio state machine
 #endif                                                   // RGBLED
 
+    init_adc();                                          // Initialize ADC for battery voltage monitoring
+
 #ifdef CRSF
-    crsf_init();           // Start CRSF receiver on Core 1
+    crsf_init();                                         // Start CRSF receiver on Core 1
     multicore_launch_core1(crsf_decode_loop);
 #elif defined(IBUS)
-    Ibus_Init();           // Start iBus receiver on Core 1
+    Ibus_Init();  // Start iBus receiver on Core 1
     multicore_launch_core1(ibus_decode_loop);
-#endif // CRSF or IBUS
+#endif                                                   // CRSF or IBUS
 
     printf("Core 1 running RC receiver - polling channels...\n");
 
@@ -232,23 +238,23 @@ int main()
                 {
                     // for motor channels, we want to output the full PWM pulse width range for each motor (pin A for forward, pin B for reverse)
                     // with 1000-2000 input mapped to 0-wrap value of slice
-                    printf("%dM ", i+1);
-                    if(RC_Channels[4] < 1400) // arm switch is off
+                    printf("%dM ", i + 1);
+                    if (RC_Channels[4] < 1400)  // arm switch is off
                     {                           // so disable motor
                         pwm_set_gpio_level(channels[i].pin[0], 0);
                         pwm_set_gpio_level(channels[i].pin[1], 0);
                     }
                     else
-                        motor_drive(channels[i], RC_Channels[i]);     // run motor at set speed
+                        motor_drive(channels[i], RC_Channels[i]);  // run motor at set speed
                 }
                 else if (channels[i].type == SERVO)
                 {
-                    printf("%dS ", i+1);
+                    printf("%dS ", i + 1);
                     servo_set_pulse_us(channels[i].pin[0], RC_Channels[i]);  // Set internal pwm servo to the value of ibus channel
                 }
                 else if (channels[i].type == SWITCH)
                 {
-                    printf("%dW ", i+1);
+                    printf("%dW ", i + 1);
                     gpio_put(channels[i].pin[0], RC_Channels[i] > 1500 ? 1 : 0);  // Set switch GPIO high if channel value above 1500, otherwise low
                 }
             }
@@ -257,15 +263,22 @@ int main()
         else
         {
             if (RC_new_data_flag++ > 10)     // increment flag to indicate we've missed an iBus packet
-            {                                  // We've missed more than 10 packets, so we're likely in a failsafe condition
-                put_pixel(RED);                // flash red on the RGB LED to indicate FAILSAFE condition
+            {                                // We've missed more than 10 packets, so we're likely in a failsafe condition
+                put_pixel(RED);              // flash red on the RGB LED to indicate FAILSAFE condition
                 if (RC_new_data_flag > 250)  // if we've missed more than 250 packets, reset flag to prevent overflow and keep printing message
                 {
                     RC_new_data_flag = 250;  // prevent counter overflow
                 }
             }
         }
-        sleep_ms(7);  // iBus packets repeat at around 7ms intervals
+#ifdef TELEMETRY
+        uint32_t mv = get_smoothed_mv();
+        uint8_t crsf_packet[CRSF_BATTERY_FRAME_SIZE];
+        crsf_battery_packet(crsf_packet, mv);  // Send voltage in mV to the packet function
+        crsf_telemetry_send(crsf_packet);      // Send telemetry packet with battery voltage to receiver
+#endif                                         // TELEMETRY
+
+        sleep_ms(100);                         // iBus packets repeat at around 7ms intervals
     }
     return 0;
 }

@@ -5,9 +5,9 @@
  * CRSF received values are converted from 0-2047 range to 1000-2000
  */
 
-#include <stdio.h>
 #include "hardware/uart.h"
 #include "pico/stdlib.h"
+#include <stdio.h>
 #include "crsf.h"
 
 #define TIMEOUT_US 100  // 100µs is plenty safe for 420k baud (byte = 24µs)
@@ -18,18 +18,25 @@ volatile uint16_t RC_Channels[CRSF_NUM_CHANNELS] = {[0 ... CRSF_NUM_CHANNELS - 1
 // Flag to indicate new valid data is available (optional - for main core polling)
 volatile uint8_t RC_new_data_flag = -1;
 
-uint8_t crc8(uint8_t *data, uint8_t len)
+uint8_t crc8(const uint8_t *ptr, uint8_t len)
 {
     uint8_t crc = 0;
     for (uint8_t i = 0; i < len; i++)
     {
-        crc ^= data[i];
+        crc ^= ptr[i];  // XOR the next byte into the CRC
         for (uint8_t j = 0; j < 8; j++)
         {
+            // Check if the most significant bit is set
             if (crc & 0x80)
+            {
+                // Shift and XOR with the CRSF polynomial 0xD5
                 crc = (crc << 1) ^ 0xD5;
+            }
             else
+            {
+                // Just shift
                 crc <<= 1;
+            }
         }
     }
     return crc;
@@ -67,14 +74,25 @@ void _crsf_decode_channels(const uint8_t *p)
 
 void crsf_init(void)
 {
-    // Set up our UART
+    // Set up our RX UART for incoming CRSF data
     uart_init(CRSF_UART_RX, CRSF_BAUD_RATE);
-    // Set the TX and RX pins by using the function select on the GPIO
-    // Set datasheet for more information on function select
-    // gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(CRSF_RX_PIN, GPIO_FUNC_UART);
     uart_set_fifo_enabled(CRSF_UART_RX, true);
+#ifdef TELEMETRY
+    uart_init(CRSF_UART_TX, CRSF_BAUD_RATE);
+    gpio_set_function(CRSF_TX_PIN, GPIO_FUNC_UART);
+    uart_set_fifo_enabled(CRSF_UART_TX, true);
+#endif  // TELEMETRY
 }
+
+#ifdef TELEMETRY
+uint8_t crsf_packet[CRSF_BATTERY_FRAME_SIZE];
+
+void crsf_telemetry_send(uint8_t *packet_buffer)
+{
+    uart_write_blocking(CRSF_UART_TX, packet_buffer, CRSF_BATTERY_FRAME_SIZE);
+}
+#endif  // TELEMETRY
 
 // CRSF packet structure for 16 channels
 // Frame: [Sync][Len][Type][Payload...][CRC]
@@ -131,4 +149,38 @@ void crsf_decode_loop(void)
             }
         }
     }
+}
+
+/**
+ * Constructs a CRSF Battery Frame
+ * @param buffer: Pointer to a uint8_t array of at least 12 bytes
+ * @param voltage_mv: Calibrated battery voltage in millivolts
+ */
+void crsf_battery_packet(uint8_t *buffer, uint32_t voltage_mv)
+{
+    // 1. Set Header
+    buffer[0] = CRSF_SYNC_BYTE;
+    buffer[1] = 10;  // Length: Type(1) + Payload(8) + CRC(1)
+    buffer[2] = CRSF_TYPE_BATTERY;
+
+    // 2. Voltage (Big Endian)
+    // CRSF expects units of 0.1V. (e.g., 11.1V = 111)
+    uint16_t v = (uint16_t)(voltage_mv / 100);
+    buffer[3] = (v >> 8) & 0xFF;
+    buffer[4] = v & 0xFF;
+
+    // 3. Current (0.1A steps) - Set to 0 if not monitored
+    buffer[5] = 0;
+    buffer[6] = 0;
+
+    // 4. Capacity (1mAh steps) - Set to 0 if not monitored (3 bytes)
+    buffer[7] = 0;
+    buffer[8] = 0;
+    buffer[9] = 0;
+
+    // 5. Remaining Percentage (0-100)
+    buffer[10] = 100;
+
+    // 6. Calculate CRC (Starts from Type byte at index 2, length 9)
+    buffer[11] = crc8(&buffer[2], 9);
 }

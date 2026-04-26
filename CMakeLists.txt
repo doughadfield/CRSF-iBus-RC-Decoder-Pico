@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(RC_Decoder RC_Decoder.c pca9685.c Ibus.c InternalPWM.c rgbled.c crsf.c)
+add_executable(RC_Decoder RC_Decoder.c pca9685.c Ibus.c InternalPWM.c rgbled.c crsf.c adc.c)
 
 pico_set_program_name(RC_Decoder "RC_Decoder")
 pico_set_program_version(RC_Decoder "0.1")
@@ -64,6 +64,7 @@ target_link_libraries(RC_Decoder
         hardware_clocks
         hardware_uart
         hardware_pwm
+        hardware_adc
         pico_multicore
         )
 
