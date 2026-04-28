@@ -100,20 +100,20 @@ struct channel
     // Supports 14 channels with IBUS, 16 channels with CRSF (ELRS)
     {0, REV_MOTOR, {0, 1}, 2, 7000},  // Ch 1:  Tank left track
     {1, REV_MOTOR, {2, 3}, 2, 6600},  // Ch 2:  Tank right track
-    {2, SERVO, {8}, 1, 0},         // Ch 3:  Gun elevation
+    {2, SERVO,     {8},    1, 0},     // Ch 3:  Gun elevation
     {3, REV_MOTOR, {6, 7}, 2, 4000},  // Ch 4:  Tank turret rotation
-    {4, SWITCH, {9}, 1, 0},        // Ch 5:  Motor arm
-    {5, SWITCH, {10}, 1, 0},       // Ch 6:  Gun fire
-    {6, SWITCH, {11}, 1, 0},       // Ch 7:  LED Headlights
-    {7, SERVO, {12}, 1, 0},        // Ch 8:  Spare
-    {8, SERVO, {13}, 1, 0},        // Ch 9:  Spare
-    {9, SERVO, {14}, 1, 0},        // Ch 10: Spare
-    {10, SERVO, {15}, 1, 0},       // Ch 11: Spare
-    {11, SWITCH, {17}, 1, 0},      // Ch 12: These pins are on solder pads on the bottom of the board
-    {12, SWITCH, {18}, 1, 0},      // Ch 13: These pins are on solder pads on the bottom of the board
-    {13, SWITCH, {19}, 1, 0},      // Ch 14: These pins are on solder pads on the bottom of the board
-    {14, SWITCH, {20}, 1, 0},      // Ch 15: These pins are on solder pads on the bottom of the board
-    {15, SWITCH, {21}, 1, 0}       // Ch 16: These pins are on solder pads on the bottom of the board
+    {4, SWITCH,    {9},    1, 0},     // Ch 5:  Motor arm
+    {5, SWITCH,    {10},   1, 0},     // Ch 6:  Gun fire
+    {6, SWITCH,    {11},   1, 0},     // Ch 7:  LED Headlights
+    {7, SERVO,     {12},   1, 0},     // Ch 8:  Spare
+    {8, SERVO,     {13},   1, 0},     // Ch 9:  Spare
+    {9, SERVO,     {14},   1, 0},     // Ch 10: Spare
+    {10, SERVO,    {15},   1, 0},     // Ch 11: Spare
+    {11, SWITCH,   {17},   1, 0},     // Ch 12: These pins are on solder pads on the bottom of the board
+    {12, SWITCH,   {18},   1, 0},     // Ch 13: These pins are on solder pads on the bottom of the board
+    {13, SWITCH,   {19},   1, 0},     // Ch 14: These pins are on solder pads on the bottom of the board
+    {14, SWITCH,   {20},   1, 0},     // Ch 15: These pins are on solder pads on the bottom of the board
+    {15, SWITCH,   {21},   1, 0}      // Ch 16: These pins are on solder pads on the bottom of the board
 };
 
 /*
