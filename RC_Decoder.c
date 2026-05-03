@@ -296,6 +296,9 @@ int main()
         }
 #ifdef TELEMETRY
         crsf_telemetry_send(crsf_packet);  // Send telemetry packet with battery voltage to receiver
+        gps_send();                        // Send GPS telemetry data if available
+
+
 #endif                                     // TELEMETRY
         watchdog_update();                 // Reset watchdog timer before delay
 
